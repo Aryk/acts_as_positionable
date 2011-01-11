@@ -75,7 +75,7 @@ If you want to change position of an employee, there are a couple of ways to do 
 WRITE METHODS
 
 employee.vp_marketing = true # => true
-employee # => <Employee id: 2, corporate_position: -5, company_id: nil>
+employee # => <Employee id: 2, corporate_position: -5, company_id: nil> 
 
 Or you can just set the column directly:
 
