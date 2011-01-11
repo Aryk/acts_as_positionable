@@ -29,13 +29,6 @@ class ActsAsPositionableTest < ActiveSupport::TestCase
       p.group(-100, "Executive Team", [:ceo, :cto, :cfo])
       p.pattern(-200, "Odd", "@value.modulo(2)==1")
     end
-
-    module PositionTypes
-      class Designer < ActiveRecord::Acts::Positionable::Types::Special
-        
-      end
-    end
-
   end
   class Company < ActiveRecord::Base
     self.table_name = "aap_companies"
