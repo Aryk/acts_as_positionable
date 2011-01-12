@@ -1,5 +1,26 @@
 require 'test_helper'
 
+module Test
+  module Unit
+    module Assertions
+      # Used to use "assert_equal arr1, arr2", but it would fail if the array was out of order (for example).
+      # This checks to make sure the elements inside match
+      def assert_same_set(expected, was, msg=nil)
+        assert_equal expected.size, was.size, "Arrays are not the same size"
+        combine = (expected | was)
+        diff1 = combine - expected
+        diff2 = combine - was
+        assert diff1.empty? && diff2.empty?, msg || "#{expected.inspect} expected but was #{was.inspect}"
+      end
+
+      # Explicit assertions when we are checking for value directly (this is different then just plain "assert")
+      # Convenience methods.
+      def assert_false(boolean, msg = nil) assert_equal(false, boolean, msg) end
+      def assert_true(boolean, msg = nil) assert_equal(true, boolean, msg) end
+    end
+  end
+end
+
 AAP = ActiveRecord::Acts::Positionable
 
 ActiveRecord::Schema.define do  
@@ -36,8 +57,6 @@ class ActsAsPositionableTest < ActiveSupport::TestCase
   end
   
   class AAPTestCase < ActiveSupport::TestCase
-    
-    purge :aap_employees
       
     def setup
       @klass = Employee
@@ -48,6 +67,10 @@ class ActsAsPositionableTest < ActiveSupport::TestCase
       @position_symbol = @@position_symbol ||= @positions.symbols(false).rand 
       @position = @positions[@position_symbol] 
       @value = @position.value
+    end
+
+    def teardown
+      @klass.destroy_all
     end
     
   end 
@@ -265,11 +288,10 @@ class ActsAsPositionableTest < ActiveSupport::TestCase
     class BaseTest < TypeTestCase
       
       test "eql?" do 
-        hash =  {@positions[4] => 1, @positions[5] => 2}
+        hash = {@positions[4] => 1, @positions[5] => 2}
         assert_equal 1, hash[@positions[4]]
         assert_equal 2, hash[@positions[5]]
         assert_equal nil, hash[@positions[6]] 
-        assert_not_empty [@positions[4]] & [@positions[4]]
       end
       
       test "array operations" do 
