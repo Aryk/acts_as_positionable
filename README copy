@@ -1,0 +1,123 @@
+Often times, we have an AR model that has a notion of position. Take, for example, employees in a company. You may want to assign a position to each employee such as CEO, VP of Engineering, Director of Marketing, Employee #1, #2, etc. Or, in the case of Mixbook, lets say you have a page in a book. The page can have a position like Front Cover, Back Cover, Page #1, etc. The more you think about, you'll realize that there other things that fall well into this paradigm.
+
+My goal was to create a extension to AR to help with these kinds of a problem in an elegant, space efficient way. Many times, people end up creating new columns for each different type of position. For the case of employee, you might add a new column when you have a new position. It's easy to see how this can get unwieldy very fast. In my approach, I use the smallest possible footprint by modeling this paradigm using a 1-4 byte signed integer column. So if you only have a couple of positions, you could use a signed TinyInt and get all this functionality in a byte!
+
+Here is how it works!
+
+
+class Employee < ActiveRecord::Base
+ 
+  ## Columns ##
+  # id: Integer
+  # corporate_position: Integer
+  # company_id: Integer
+ 
+  belongs_to :company
+ 
+  # Optional - custom position type
+  module PositionTypes
+    class Designer < ActiveRecord::Acts::Positionable::Types::Special
+       def name
+         "Some awesome designer"
+       end
+    end
+  end
+ 
+  acts_as_positionable(:column => "corporate_position") do |p|
+    # A normal number will refer to the "normal" employees
+    p.number 
+ 
+    p.special(-1, "CEO")
+    p.special(-2, "CTO")
+    p.special(-3, "CFO")
+    p.special(-4, "VP Corporate Development")
+    p.special(-5, "VP Marketing", :sort_index => 1000000)  # we don't like those guys, should come at end
+ 
+    # designer comes from custom the custom position type class defined above.
+    p.designer(-6, "Lead Designer") # 
+ 
+    p.group(-100, "Executive Team", [:ceo, :cto, :cfo])
+    p.pattern(-200, "Odd", "@value.modulo(2)==1")
+  end
+ 
+end
+class Company < ActiveRecord::Base
+ 
+  ## Columns ##
+  # id: Integer
+ 
+   has_many_with_position :employees
+ 
+end
+Values greater than zero are used to model a generic number, ie Employee #1, Page #1. However, the negative values are used to represent special positions, group positions, and pattern positions. Here is the functionality that we get.
+
+QUESTION METHODS
+
+employee = Employee.create!(:corporate_position => :ceo) # => #<Employee id: 2, corporate_position: -1, company_id: nil>
+employee.ceo? # => true
+employee.vp_corporate_development? # => false
+employee.number?(4) # => false
+employee.executive_team? # => true
+
+All these methods are created on the model, the position, and the has many association associated with it:
+
+
+company = Company.create! # => <Company id: 1>
+company.employees << Employee.new(:corporate_position => :cto) # => [<Employee id: 3, corporate_position: -2, company_id: 1>]
+company.employees.cto? # Does the company have any employees on it that are a cto? # => true
+company.employees.first.cto? # Is the employee a cto? # => true
+company.employees.first.corporate_position.cto? # Is the corporate_position of this employee that of a cto? # => true
+
+The last two use cases are pretty much the same thing but are provided for convenience.
+
+If you want to change position of an employee, there are a couple of ways to do this:
+
+WRITE METHODS
+
+employee.vp_marketing = true # => true
+employee # => <Employee id: 2, corporate_position: -5, company_id: nil> 
+
+Or you can just set the column directly:
+
+employee.corporate_position = :ceo # => :ceo
+employee # => <Employee id: 2, corporate_position: -1, company_id: nil>
+
+FINDER METHODS
+
+Wouldn't it be cool to also be able to use the position in your finders as well? Check this out...
+
+Employee.find_by_corporate_position(:ceo) # => #<Employee id: 2, corporate_position: -1, company_id: nil>
+Employee.find_all_by_corporate_position(:ceo) # => [#<Employee id: 2, corporate_position: -1, company_id: nil>]
+Employee.first(:conditions => {:corporate_position => :ceo}) # => #<Employee id: 2, corporate_position: -1, company_id: nil>
+Each position type comes with basic methods for common use cases as well:
+
+OTHER METHODS
+
+position = Employee.positions[:cto] # => #<ActiveRecord::Acts::Positionable::Types::Special:0x366da70 @name="CTO", @_memoized_titleize=["The CTO"], @_memoized_to_sym=[:cto], @value=-2, @sort_index=-2, @_memoized_short_name=["CTO"]>
+position.to_sym # => :cto # or position.keyword
+position.to_i # => -2
+position.titleize # => "The CTO"
+position.short_name # => "CTO"
+position.value # => -2
+position.name # => "CTO"
+
+POSITION TYPES
+
+I've created two abstract position type classes with the rest extending from there:
+
+Primitive
+  Number - basic number values. All numbers are greater then zero.
+  Special - represents a single non-number type (ie "CEO" or "CTO")
+Complex
+  Group - create a group of other positions (ie "Executive Team").
+  Pattern - represents a pattern of positions (ie "Odd")
+  Function - derive a custom function to match the position (experimental)
+
+The beauty of this system is that you can customize this AR plugin with additional functionality. In the example provided, we subclassed ActiveRecord::Acts::Positionable::Types::Special to create a new "designer" type:
+
+Employee.new(:corporation_position => :lead_designer).name
+# =>  "Some awesome designer"
+
+This way we can overwrite any of the functionality from the core position classes as demonstrated above.
+
+I haven't had a chance to package this into a plugin, but you can stick it into your lib folder and give it a go.
